@@ -5,7 +5,7 @@ var request = require('request')
 var jsdom = require('jsdom');
 var process = require('process');
 var path = require('path');
-var feedparser = require('ortoo-feedparser');
+var FeedParser = require('feedparser');
 
 
 
@@ -91,10 +91,7 @@ function extract_voa($){
 var feed_func = [
     {
         'name':'VOA',
-        //'url':"http://www.voachinese.com/api/zyyyoeqqvi",
         'url':"http://www.voachinese.com/api/epiqq",
-
-        //'url':"http://127.0.0.1:8089/zyyyoeqqvi",
         'extract_func':extract_voa
     },
     {
@@ -120,12 +117,12 @@ function add_article(name,article,extract_func){
             var $ = window.$;
 
 
-            console.log(name+" :parse new post:"+article.title);
+            console.log(name+" :parse new post:"+article.title+","+article.link);
 
             var body = extract_func($);
 
             if (body=="") {
-                console.log(article.title+" has no content");
+                console.log(name+","+article.title+" has no content");
                 wg.done();
                 return;
             }
@@ -158,31 +155,47 @@ for(var i in feed_func) {
     console.log("accessing "+thisOne.name+":"+thisOne.url);
 
 
+
+  var feedparser = new FeedParser();
+
+    feedparser.on('readable', function(){
+
+        var stream=this;
+
+        var article;
+        while(article=stream.read()){
+            var title = thisOne.name+" "+article.title;
+            if(alreadyHave(title)){
+                return;
+            }
+
+            console.log(thisOne.name+" add article");
+            add_article(name,article,thisOne.extract_func);
+        }
+    });
+
     var reqObj={
         uri:thisOne.url,
         proxy:"http://127.0.0.1:8787"
     };
 
+
     request(reqObj, function (err, response, body){  
 
         if (err) {
-            
             console.log(thisOne.name+": error:"+err);
             wg.done();
             return;
         }
 
-        feedparser.parseString(body).on('article', function(article){
-            var title = name+" "+article.title;
+        console.log(thisOne.name+thisOne.url+" getted");
 
-            if(alreadyHave(title)){
-                return;
-            }
-            add_article(name,article,thisOne.extract_func);
-        });
+        var stream=this;
+        stream.pipe(feedparser);
 
         wg.done();
     });
+
     
 }
 
