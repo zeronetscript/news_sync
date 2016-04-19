@@ -3,9 +3,7 @@ var fs = require("fs")
 var jsonfile = require("jsonfile")
 var request = require('request')
 var jsdom = require('jsdom');
-var process = require('process');
 var path = require('path');
-var FeedParser = require('feedparser');
 
 
 
@@ -13,7 +11,6 @@ var WaitGroup=require('waitgroup');
 
 var wg=new WaitGroup;
 
-process.env.http_proxy='http://127.0.0.1:8787';
 
 var jqueryPath=path.join(__dirname,"jquery.js");
 
@@ -50,7 +47,6 @@ function extract_dw($){
 
     if (contents.length==0) {
         
-        console.log("not found contents");
         return "";
     }
         
@@ -67,12 +63,10 @@ function extract_dw($){
 
 function extract_voa($){
 
-    //var contents=$(".main-content > .content > #article > .articleContent > .zoomMe").children("p");
     var contents=$("#article  div.articleContent div.zoomMe > p ");
 
     if (contents.length==0) {
         
-        console.log("content not found");
         return "";
     }
         
@@ -89,11 +83,13 @@ function extract_voa($){
 }
 
 var feed_func = [
+	/*
     {
         'name':'VOA',
         'url':"http://www.voachinese.com/api/epiqq",
         'extract_func':extract_voa
     },
+    */
     {
         'name':'DW',
         'url':"http://rss.dw.com/rdf/rss-chi-all",
@@ -106,7 +102,7 @@ function add_article(name,article,extract_func){
     wg.add();
 
     jsdom.env({
-        url:article.link,
+        url:encodeURI(article.link),
         src:[jquery],
         done:function(err,window){
             if (err) {
@@ -117,17 +113,14 @@ function add_article(name,article,extract_func){
             var $ = window.$;
 
 
-            console.log(name+" :parse new post:"+article.title+","+article.link);
 
             var body = extract_func($);
 
             if (body=="") {
-                console.log(name+","+article.title+" has no content");
                 wg.done();
                 return;
             }
 
-            console.log(article.title+" collected:"+body);
 
             var post = {
                 'post_id': old_data.next_post_id,
@@ -143,6 +136,9 @@ function add_article(name,article,extract_func){
     });
     
 }
+
+var wgCan;
+
 for(var i in feed_func) {
 
     var thisOne=feed_func[i];
@@ -152,11 +148,28 @@ for(var i in feed_func) {
     //this is neccessery , or wg.Wait may run before any feed parsed
     wg.add();
 
-    console.log("accessing "+thisOne.name+":"+thisOne.url);
+    var FeedParser = require('feedparser');
+  
+    var feedparser = new FeedParser();
 
 
+    var req = request (thisOne.url);
 
-  var feedparser = new FeedParser();
+    req.on('response',function(res){
+	    if (res.statusCode!=200) {
+		    console.log(thisOne.name+" error done");
+		    wg.done();
+		    return;
+	    }
+
+	    res.pipe(feedparser);
+    });
+
+
+    feedparser.on('error',function(err){
+	    wg.done();
+	    console.log("error done:"+err);
+    });
 
     feedparser.on('readable', function(){
 
@@ -166,36 +179,16 @@ for(var i in feed_func) {
         while(article=stream.read()){
             var title = thisOne.name+" "+article.title;
             if(alreadyHave(title)){
-                return;
+                continue;
             }
-
-            console.log(thisOne.name+" add article");
             add_article(name,article,thisOne.extract_func);
         }
+	
     });
 
-    var reqObj={
-        uri:thisOne.url,
-        proxy:"http://127.0.0.1:8787"
-    };
-
-
-    request(reqObj, function (err, response, body){  
-
-        if (err) {
-            console.log(thisOne.name+": error:"+err);
-            wg.done();
-            return;
-        }
-
-        console.log(thisOne.name+thisOne.url+" getted");
-
-        var stream=this;
-        stream.pipe(feedparser);
-
-        wg.done();
+    feedparser.on('end',function(){
+	    wg.done();
     });
-
     
 }
 
