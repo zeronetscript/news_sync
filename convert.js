@@ -40,29 +40,9 @@ function alreadyHave(title){
 
 }
 
+function collectContent($,jqueryCssSelector){
 
-function extract_dw($){
-
-    var contents=$("#bodyContent div.group > div.longText > p ");
-
-    if (contents.length==0) {
-        
-        return "";
-    }
-        
-    var res="";
-    for (var i in contents){
-        var pText = contents[i].outerHTML;
-        if (pText!=undefined) {
-            res=res+'\n'+pText;
-        }
-    }
-
-    return res;
-}
-
-function extract_rfi($){
-    var contents=$("div[itemprop='articleBody']  > p ");
+    var contents=$(jqueryCssSelector);
 
     if (contents.length==0) {
         
@@ -78,47 +58,47 @@ function extract_rfi($){
     }
 
     return res;
-
 
 }
 
-function extract_voa($){
 
-    var contents=$("#article  div.articleContent div.zoomMe > p ");
-
-    if (contents.length==0) {
-        
-        return "";
+function genFunc(jqueryCssSelector){
+    return function($){
+        return collectContent($,jqueryCssSelector);
     }
-        
-    var res="";
-    for (var i in contents){
-        var pText = contents[i].outerHTML;
-        if (pText!=undefined) {
-            res=res+'\n'+pText;
-        }
-    }
-
-    return res;
-
 }
 
 var feed_func = [
 
     {
-        'name':'RFI',
-        'url':"http://cn.rfi.fr/general/rss",
-        'extract_func':extract_rfi
+        name:'RFI',
+        url:"http://cn.rfi.fr/general/rss",
+        extract_func:genFunc("div[itemprop='articleBody']  > p ")
     },
     {
-        'name':'VOA',
-        'url':"http://www.voachinese.com/api/epiqq",
-        'extract_func':extract_voa
+        name:'VOA',
+        url:"http://www.voachinese.com/api/epiqq",
+        extract_func:genFunc("#article  div.articleContent div.zoomMe > p")
     },
     {
-        'name':'DW',
-        'url':"http://rss.dw.com/rdf/rss-chi-all",
-        'extract_func':extract_dw
+        name:'DW',
+        url:"http://rss.dw.com/rdf/rss-chi-all",
+        extract_func:genFunc("#bodyContent div.group > div.longText > p ")
+    },
+    {
+        name:'RFA',
+        url:'http://www.rfa.org/mandarin/RSS',
+        extract_func:genFunc("#storytext p")
+    },
+    {
+        name:'BBC',
+        url:'http://www.bbc.com/zhongwen/simp/index.xml',
+        extract_func:genFunc("#page div[role='main'] div.story-body p")
+    },
+    {
+        name:'NYTIMES',
+        url:'http://cn.nytimes.com/rss.html',
+        extract_func:genFunc("article.article_content div.content_list > p")
     }
 ];
 
@@ -194,6 +174,7 @@ function nextFeed(index){
         var stream=this;
 
         var article;
+
         while(article=stream.read()){
             var title = thisOne.name+" "+article.title;
             if(alreadyHave(title)){
@@ -216,7 +197,6 @@ function nextFeed(index){
 		    return;
 	    }
 
-    
         console.log("list:"+name);
 	    res.pipe(feedparser);
     });
