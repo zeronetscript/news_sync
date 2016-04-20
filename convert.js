@@ -4,7 +4,7 @@ var jsonfile = require("jsonfile")
 var request = require('request')
 var jsdom = require('jsdom');
 var path = require('path');
-
+var FeedParser = require('feedparser');
 
 
 var WaitGroup=require('waitgroup');
@@ -26,7 +26,7 @@ var old_data = jsonfile.readFileSync("data.json");
 
 var next_post_id = old_data.next_post_id;
 
-var changed = true;
+var changed = false;
 
 function alreadyHave(title){
 
@@ -61,6 +61,27 @@ function extract_dw($){
     return res;
 }
 
+function extract_rfi($){
+    var contents=$("div[itemprop='articleBody']  > p ");
+
+    if (contents.length==0) {
+        
+        return "";
+    }
+        
+    var res="";
+    for (var i in contents){
+        var pText = contents[i].outerHTML;
+        if (pText!=undefined) {
+            res=res+'\n'+pText;
+        }
+    }
+
+    return res;
+
+
+}
+
 function extract_voa($){
 
     var contents=$("#article  div.articleContent div.zoomMe > p ");
@@ -83,13 +104,17 @@ function extract_voa($){
 }
 
 var feed_func = [
-	/*
+
+    {
+        'name':'RFI',
+        'url':"http://cn.rfi.fr/general/rss",
+        'extract_func':extract_rfi
+    },
     {
         'name':'VOA',
         'url':"http://www.voachinese.com/api/epiqq",
         'extract_func':extract_voa
     },
-    */
     {
         'name':'DW',
         'url':"http://rss.dw.com/rdf/rss-chi-all",
@@ -121,6 +146,7 @@ function add_article(name,article,extract_func){
                 return;
             }
 
+            console.log("adding "+name+":"+article.title);
 
             var post = {
                 'post_id': old_data.next_post_id,
@@ -131,45 +157,37 @@ function add_article(name,article,extract_func){
 
             old_data.post.unshift(post);
             old_data.next_post_id = old_data.next_post_id+1;
+            changed=true;
             wg.done();
         }
     });
     
 }
+    
 
-var wgCan;
+function nextFeed(index){
 
-for(var i in feed_func) {
 
-    var thisOne=feed_func[i];
-
-    var name=thisOne.name;
-
-    //this is neccessery , or wg.Wait may run before any feed parsed
-    wg.add();
-
-    var FeedParser = require('feedparser');
-  
     var feedparser = new FeedParser();
 
+    if (index>=feed_func.length) {
+        return;
+    }
+
+    var thisOne=feed_func[index];
+
+    var name=thisOne.name;
+    console.log("collect:"+name);
+    wg.add();
 
     var req = request (thisOne.url);
 
-    req.on('response',function(res){
-	    if (res.statusCode!=200) {
-		    console.log(thisOne.name+" error done");
-		    wg.done();
-		    return;
-	    }
-
-	    res.pipe(feedparser);
-    });
-
-
     feedparser.on('error',function(err){
-	    wg.done();
+        nextFeed(index+1);
 	    console.log("error done:"+err);
+	    wg.done();
     });
+
 
     feedparser.on('readable', function(){
 
@@ -179,22 +197,37 @@ for(var i in feed_func) {
         while(article=stream.read()){
             var title = thisOne.name+" "+article.title;
             if(alreadyHave(title)){
+                console.log("skip "+title);
                 continue;
             }
             add_article(name,article,thisOne.extract_func);
         }
 	
     });
-
     feedparser.on('end',function(){
+        nextFeed(index+1);
 	    wg.done();
     });
+
+    req.on('response',function(res){
+	    if (res.statusCode!=200) {
+		    console.log(thisOne.name+" error done");
+		    wg.done();
+		    return;
+	    }
+
+    
+        console.log("list:"+name);
+	    res.pipe(feedparser);
+    });
+
     
 }
 
+nextFeed(0);
+
 
 wg.wait(function(){
-    console.log("called all ");
     if (changed) {
         old_data.modified = (new Date).getTime()/1000;
         jsonfile.writeFileSync('new_data.json',old_data,{spaces:2});
