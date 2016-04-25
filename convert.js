@@ -24,6 +24,10 @@ var jquery = fs.readFileSync(jqueryPath,"utf-8");
 
 var old_data = jsonfile.readFileSync("data.json");
 
+if (!old_data.tag) {
+  old_data.tag=[]
+}
+
 var next_post_id = old_data.next_post_id;
 
 var changed = false;
@@ -132,8 +136,36 @@ function add_article(name,article,extract_func){
                 'post_id': old_data.next_post_id,
                 'title':name+" "+article.title,
                 'date_published': (new Date(article.pubdate)).getTime()/1000,
-                'body':body
+                'body':"---\n"+body
             };
+
+            var dedup=[name];
+
+            for(var i in article.categories){
+              var spaceSplited= article.categories[i].split(" ");
+              if (spaceSplited=="") {
+                //exclude empty
+                continue;
+              }
+
+              //repace multi spaces to one slash
+              var spaceAsSlash=spaceSplited[0];
+              var left = spaceSplited.slice(1);
+              for (var j in left){
+                spaceAsSlash += "/"+left[j];
+              }
+
+              if (dedup.indexOf(spaceAsSlash)==-1) {
+                dedup.push(spaceAsSlash);
+              }
+            }
+
+            for(var i in dedup){
+              old_data.tag.push({
+                value:dedup[i],
+                post_id:post.post_id
+              });
+            }
 
             old_data.post.unshift(post);
             old_data.next_post_id = old_data.next_post_id+1;
@@ -176,6 +208,7 @@ function nextFeed(index){
         var article;
 
         while(article=stream.read()){
+          console.log(article);
             var title = thisOne.name+" "+article.title;
             if(alreadyHave(title)){
                 console.log("skip "+title);
