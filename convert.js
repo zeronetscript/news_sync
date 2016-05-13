@@ -115,6 +115,7 @@ function add_article(name,article,extract_func){
         src:[jquery],
         done:function(err,window){
             if (err) {
+                window.close();
                 wg.done();
                 return;
             }
@@ -126,6 +127,7 @@ function add_article(name,article,extract_func){
             var body = extract_func($);
 
             if (body=="") {
+                window.close();
                 wg.done();
                 return;
             }
@@ -171,6 +173,7 @@ function add_article(name,article,extract_func){
             old_data.next_post_id = old_data.next_post_id+1;
             changed=true;
             wg.done();
+            window.close();
         }
     });
     
@@ -208,7 +211,6 @@ function nextFeed(index){
         var article;
 
         while(article=stream.read()){
-          console.log(article);
             var title = thisOne.name+" "+article.title;
             if(alreadyHave(title)){
                 console.log("skip "+title);
@@ -233,8 +235,6 @@ function nextFeed(index){
         console.log("list:"+name);
 	    res.pipe(feedparser);
     });
-
-    
 }
 
 nextFeed(0);
